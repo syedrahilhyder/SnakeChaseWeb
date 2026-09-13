@@ -1,0 +1,164 @@
+/* SnakeChase — bright cartoon style */
+:root {
+  --grass-a: #b8e59c;
+  --grass-b: #aad98b;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #5ccd5c;
+  font-family: -apple-system, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#board {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* HUD */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: calc(12px + env(safe-area-inset-top)) 14px 0 14px;
+  pointer-events: none;
+}
+.chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  min-width: 54px;
+}
+.chip-label { font-size: 11px; font-weight: 600; color: #6b7a8f; letter-spacing: 0.3px; }
+.chip-value { font-size: 22px; font-weight: 800; color: #2c3e50; line-height: 1.1; }
+
+#pause-btn {
+  margin-left: auto;
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+
+/* Joystick */
+#joystick {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 210px;
+  height: 210px;
+  padding: 0 0 calc(24px + env(safe-area-inset-bottom)) 24px;
+  z-index: 5;
+}
+#joy-base {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  border: 3px solid rgba(91, 140, 255, 0.45);
+}
+#joy-thumb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 70px;
+  height: 70px;
+  margin: -35px 0 0 -35px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #6aa8ff, #3b6fd6);
+  box-shadow: 0 4px 10px rgba(59, 111, 214, 0.5);
+}
+
+/* Overlay */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #5ccd5c, #4ca7e6);
+  z-index: 10;
+}
+.overlay.hidden { display: none; }
+.overlay-card {
+  text-align: center;
+  color: #fff;
+  padding: 30px;
+  max-width: 520px;
+}
+.overlay-title {
+  font-size: 58px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+.overlay-sub {
+  font-size: 20px;
+  font-weight: 600;
+  opacity: 0.92;
+  margin-top: 8px;
+}
+.best {
+  display: inline-block;
+  margin-top: 22px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 20px;
+  font-weight: 700;
+}
+.best.hidden { display: none; }
+.big-btn {
+  margin-top: 26px;
+  border: none;
+  font-size: 30px;
+  font-weight: 900;
+  color: #fff;
+  padding: 16px 70px;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #ff8a3d, #f2641c);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.help {
+  margin-top: 26px;
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.9;
+  line-height: 1.5;
+}

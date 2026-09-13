@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SnakeChase" />
+  <meta name="theme-color" content="#5ccd5c" />
+  <title>SnakeChase</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="board"></canvas>
+
+    <!-- Top HUD -->
+    <div id="hud">
+      <div class="chip"><span class="chip-label">Score</span><span class="chip-value" id="hud-score">0</span></div>
+      <div class="chip"><span class="chip-label">Level</span><span class="chip-value" id="hud-level">1</span></div>
+      <div class="chip"><span class="chip-label">Lives</span><span class="chip-value" id="hud-lives">3</span></div>
+      <div class="chip"><span class="chip-label">To clear</span><span class="chip-value" id="hud-clear">8</span></div>
+      <div class="chip"><span class="chip-label">Time</span><span class="chip-value" id="hud-time">60</span></div>
+      <button id="pause-btn" aria-label="Pause">&#10074;&#10074;</button>
+    </div>
+
+    <!-- Joystick -->
+    <div id="joystick">
+      <div id="joy-base">
+        <div id="joy-thumb"></div>
+      </div>
+    </div>
+
+    <!-- Overlays (menu, level complete, game over, paused) -->
+    <div id="overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div id="overlay-title" class="overlay-title">SnakeChase</div>
+        <div id="overlay-sub" class="overlay-sub">Chase the rats. Grow the snake!</div>
+        <div id="best" class="best hidden">Best Score: 0</div>
+        <button id="overlay-btn" class="big-btn">Play</button>
+        <p id="overlay-help" class="help">
+          Use the joystick to steer the snake. Eat the rats that scurry out of the rat holes.
+          Clear each level's quota before the timer runs out.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
