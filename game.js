@@ -585,62 +585,85 @@
     overlay.classList.add('hidden');
   }
 
-  // ---------- Joystick ----------
+  // ---------- Joystick (floating) ----------
+  // The joystick appears wherever the player touches the board and follows the
+  // finger anywhere on screen. Touches are captured on the whole document so
+  // the finger never "loses" the control by drifting off a small region.
   let joyActive = false;
   let joyCenter = null;
-  let joyMaxDrag = 180 / 2 - 35;
+  let joyPointerId = null;
+  const joyMaxDrag = 90 - 35;   // (base radius) - (thumb radius)
 
-  function joyPos(e) {
-    const rect = joystick.getBoundingClientRect();
-    const c = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    return { x: e.clientX - c.x, y: e.clientY - c.y };
-  }
-
-  function onJoyMove(e) {
-    e.preventDefault();
-    let d = joyPos(e);
-    let mag = Math.hypot(d.x, d.y);
+  function applyJoy(dx, dy) {
+    let mag = Math.hypot(dx, dy);
     if (mag > joyMaxDrag) {
-      d.x = d.x / mag * joyMaxDrag;
-      d.y = d.y / mag * joyMaxDrag;
+      dx = dx / mag * joyMaxDrag;
+      dy = dy / mag * joyMaxDrag;
       mag = joyMaxDrag;
     }
-    joyThumb.style.transform = 'translate(' + d.x + 'px,' + d.y + 'px)';
-    const nx = d.x / joyMaxDrag;
-    const ny = d.y / joyMaxDrag;
+    joyThumb.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    const nx = dx / joyMaxDrag;
+    const ny = dy / joyMaxDrag;
     state.joyVector = { x: nx, y: ny };
   }
 
-  function onJoyEnd() {
+  function joyStart(x, y) {
+    if (state.phase !== 'playing') return;
+    joyActive = true;
+    joyCenter = { x: x, y: y };
+    joystick.classList.add('active');
+    joyBase.style.left = x + 'px';
+    joyBase.style.top = y + 'px';
+    applyJoy(0, 0);
+  }
+
+  function joyMove(x, y) {
+    if (!joyActive || !joyCenter) return;
+    applyJoy(x - joyCenter.x, y - joyCenter.y);
+  }
+
+  function joyEnd() {
+    joyActive = false;
+    joyCenter = null;
+    joyPointerId = null;
+    joystick.classList.remove('active');
     joyThumb.style.transform = 'translate(0,0)';
     state.joyVector = { x: 0, y: 0 };
   }
 
-  joystick.addEventListener('touchstart', function (e) {
+  // ---- Touch handlers ----
+  document.addEventListener('touchstart', function (e) {
+    // Ignore touches that land on interactive buttons/menus.
+    if (e.target.closest('button, .overlay')) return;
+    const t = e.touches[0];
+    joyPointerId = t.identifier;
     e.preventDefault();
-    joyActive = true;
-    onJoyMove(e.touches[0]);
+    joyStart(t.clientX, t.clientY);
   }, { passive: false });
-  joystick.addEventListener('touchmove', function (e) {
-    e.preventDefault();
+  document.addEventListener('touchmove', function (e) {
     if (!joyActive) return;
-    onJoyMove(e.touches[0]);
-  }, { passive: false });
-  joystick.addEventListener('touchend', function (e) {
     e.preventDefault();
-    joyActive = false;
-    onJoyEnd();
+    const t = e.touches[0];
+    if (t.identifier !== joyPointerId) return;
+    joyMove(t.clientX, t.clientY);
   }, { passive: false });
-  joystick.addEventListener('touchcancel', function (e) {
-    e.preventDefault();
-    joyActive = false;
-    onJoyEnd();
+  document.addEventListener('touchend', function (e) {
+    if (!joyActive) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyPointerId) { joyEnd(); break; }
+    }
+  }, { passive: false });
+  document.addEventListener('touchcancel', function (e) {
+    if (joyActive) joyEnd();
   }, { passive: false });
 
-  // Mouse fallback for desktop testing.
-  joystick.addEventListener('mousedown', function (e) { joyActive = true; onJoyMove(e); });
-  window.addEventListener('mousemove', function (e) { if (joyActive) onJoyMove(e); });
-  window.addEventListener('mouseup', function () { if (joyActive) { joyActive = false; onJoyEnd(); } });
+  // ---- Mouse fallback for desktop testing ----
+  document.addEventListener('mousedown', function (e) {
+    if (e.target.closest('button, .overlay')) return;
+    joyStart(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', function (e) { if (joyActive) joyMove(e.clientX, e.clientY); });
+  document.addEventListener('mouseup', function () { if (joyActive) joyEnd(); });
 
   // ---------- Buttons ----------
   pauseBtn.addEventListener('click', function () {

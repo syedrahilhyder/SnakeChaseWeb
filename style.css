@@ -45,6 +45,7 @@ html, body {
   align-items: center;
   padding: calc(12px + env(safe-area-inset-top)) 14px 0 14px;
   pointer-events: none;
+  z-index: 6;   /* keep the pause button above the joystick touch layer */
 }
 .chip {
   display: flex;
@@ -74,24 +75,26 @@ html, body {
   cursor: pointer;
 }
 
-/* Joystick */
+/* Joystick — floating touch layer. The base appears where you touch. */
 #joystick {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 210px;
-  height: 210px;
-  padding: 0 0 calc(24px + env(safe-area-inset-bottom)) 24px;
+  inset: 0;
   z-index: 5;
 }
 #joy-base {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 180px;
   height: 180px;
+  margin: -90px 0 0 -90px;   /* centers the base under the touch point */
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.35);
   border: 3px solid rgba(91, 140, 255, 0.45);
+  opacity: 0;
+  transition: opacity 0.15s;
 }
+#joystick.active #joy-base { opacity: 1; }
 #joy-thumb {
   position: absolute;
   top: 50%;
