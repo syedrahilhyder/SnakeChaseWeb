@@ -37,6 +37,9 @@
     holes: [],
     particles: [],
     popups: [],
+    decor: [],          // decorative grass & bushes (non-collidable)
+    hen: null,          // flying bonus hen
+    henTimer: 0,        // seconds until the next bonus hen appears
     config: null,
     ratSpawnBudget: 0,
     comboCount: 0,
@@ -53,7 +56,7 @@
     return {
       ratsToSpawn: 8 + l * 2,
       maxActiveRats: Math.min(3 + l, 12),
-      holesCount: Math.min(1 + l, 6),
+      holesCount: Math.min(1 + l, 5),
       snakeSpeed: 180 + l * 12,
       ratSpeed: 90 + l * 8,
       ratSpawnInterval: Math.max(1.6 - l * 0.08, 0.5),
@@ -69,20 +72,25 @@
     return { x: v.x / len, y: v.y / len };
   }
 
-  function resetLevel() {
+  function resetLevel(resetSnake) {
     const c = levelConfig(state.level);
     state.config = c;
     state.rats = [];
     state.particles = [];
     state.popups = [];
+    state.hen = null;
+    state.henTimer = 14 + Math.random() * 6;   // first bonus hen appears after ~14-20s
 
     const cx = state.fieldW / 2;
     const cy = state.fieldH / 2;
     const step = c.snakeSpeed / 30;
     state.snakeHeading = { x: 0, y: -1 };
     state.snakeDirection = { x: 0, y: -1 };
+
+    // Keep the snake's grown size across levels unless starting a brand-new game.
+    const snakeLength = resetSnake ? 6 : Math.max(state.snake.length, 6);
     state.snake = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < snakeLength; i++) {
       state.snake.push({ x: cx, y: cy + i * step });
     }
     state.pathHistory = state.snake.map(p => ({ x: p.x, y: p.y }));
@@ -99,6 +107,7 @@
       });
     }
 
+    state.decor = generateDecor();
     state.ratSpawnBudget = c.ratsToSpawn;
     state.eatenThisLevel = 0;
     state.comboCount = 0;
@@ -106,12 +115,28 @@
     state.timeRemaining = c.timeLimit;
   }
 
+  // A few non-collidable grass tufts and bushes.
+  function generateDecor() {
+    const items = [];
+    const count = 3 + Math.floor(Math.random() * 3);   // 3-5 decorations
+    const pad = 60;
+    for (let i = 0; i < count; i++) {
+      const type = Math.random() < 0.5 ? 'grass' : 'bush';
+      items.push({
+        x: pad + Math.random() * (state.fieldW - pad * 2),
+        y: pad + Math.random() * (state.fieldH - pad * 2),
+        type: type,
+      });
+    }
+    return items;
+  }
+
   function startGame() {
     state.score = 0;
     state.level = 1;
     state.lives = 3;
     state.bestScore = Number(localStorage.getItem('snakechase.best') || 0);
-    resetLevel();
+    resetLevel(true);   // fresh game starts with a base-length snake
     state.phase = 'playing';
     hideOverlay();
     updateHUD();
@@ -119,7 +144,7 @@
 
   function nextLevel() {
     state.level += 1;
-    resetLevel();
+    resetLevel(false);  // keep the snake's grown size across levels
     state.phase = 'playing';
     hideOverlay();
   }
@@ -147,7 +172,7 @@
       }
       showOverlay('Game Over', 'Score: ' + state.score, 'Play Again', true);
     } else {
-      resetLevel();
+      resetLevel(false);  // keep the snake's size when retrying the level
       state.popups.push(makePopup(reason.message, state.fieldW / 2, state.fieldH / 2, '#ff5555', 1.4));
       state.phase = 'playing';
     }
@@ -224,6 +249,7 @@
     updateSnake(dt);
     updateRats(dt);
     updateHoles(dt);
+    updateHen(dt);
     updateParticles(dt);
     updatePopups(dt);
     updateTimer(dt);
@@ -326,6 +352,9 @@
       if (py < margin || py > state.fieldH - margin) { rat.vy *= -1; py = Math.min(Math.max(py, margin), state.fieldH - margin); }
       rat.x = px;
       rat.y = py;
+      // Always face the direction of travel so the rat never appears to
+      // move backwards.
+      rat.angle = Math.atan2(rat.vy, rat.vx);
     }
   }
 
@@ -343,15 +372,70 @@
   }
 
   function spawnRat(hole) {
-    const angle = Math.random() * Math.PI * 2;
     const c = state.config;
+    // Spawn heading away from the field center through the hole, so the rat
+    // steps out of the hole instead of lingering on it.
+    const away = { x: hole.x - state.fieldW / 2, y: hole.y - state.fieldH / 2 };
+    const awayMag = Math.hypot(away.x, away.y) || 1;
+    const angle = Math.atan2(away.y / awayMag, away.x / awayMag) + (Math.random() - 0.5) * 1.2;
     state.rats.push({
       x: hole.x,
       y: hole.y,
       vx: Math.cos(angle) * c.ratSpeed,
       vy: Math.sin(angle) * c.ratSpeed,
       wanderTimer: 0.6 + Math.random(),
+      angle: angle,
     });
+  }
+
+  // ---------- Flying bonus hen ----------
+  function spawnHen() {
+    const fromLeft = Math.random() < 0.5;
+    const speed = 150 + Math.random() * 60;
+    state.hen = {
+      x: fromLeft ? -40 : state.fieldW + 40,
+      y: 60 + Math.random() * (state.fieldH - 120),
+      vx: (fromLeft ? 1 : -1) * speed,
+      vy: 0,
+      t: Math.random() * Math.PI * 2,   // for the sine wobble
+      wobbleAmp: 30 + Math.random() * 30,
+    };
+  }
+
+  function updateHen(dt) {
+    if (state.hen) {
+      const h = state.hen;
+      h.t += dt * 4;
+      h.x += h.vx * dt;
+      h.y += Math.sin(h.t) * h.wobbleAmp * dt * 2;
+      // Remove once it flies off the screen.
+      if (h.x < -80 || h.x > state.fieldW + 80) {
+        state.hen = null;
+        state.henTimer = 16 + Math.random() * 12;
+      }
+    } else {
+      state.henTimer -= dt;
+      if (state.henTimer <= 0) {
+        spawnHen();
+      }
+    }
+  }
+
+  function eatHen() {
+    if (!state.hen) return;
+    const h = state.hen;
+    const bonus = 50;
+    state.score += bonus;
+    spawnEatParticles(h.x, h.y);
+    state.particles.push({ x: h.x, y: h.y, vx: 0, vy: -90, life: 0.6, maxLife: 0.6, color: '#ff9f2e', size: 7 });
+    state.popups.push(makePopup('+' + bonus, h.x, h.y, '#ff9f2e', 1.2));
+    state.hen = null;
+    state.henTimer = 16 + Math.random() * 12;
+    if (state.score > state.bestScore) {
+      state.bestScore = state.score;
+      localStorage.setItem('snakechase.best', String(state.bestScore));
+    }
+    updateHUD();
   }
 
   function updateParticles(dt) {
@@ -384,6 +468,8 @@
     const head = state.snake[0];
     if (!head) return;
     const eatRadius = 22;
+
+    // Eat rats.
     for (let i = state.rats.length - 1; i >= 0; i--) {
       const rat = state.rats[i];
       if (Math.hypot(head.x - rat.x, head.y - rat.y) < eatRadius) {
@@ -392,16 +478,33 @@
         if (state.phase !== 'playing') return;
       }
     }
+
+    // Cobble the flying bonus hen.
+    if (state.hen && Math.hypot(head.x - state.hen.x, head.y - state.hen.y) < eatRadius) {
+      eatHen();
+      if (state.phase !== 'playing') return;
+    }
+
+    // Fall into a rat hole => lose a life.
+    const holeRadius = 15;
+    for (const hole of state.holes) {
+      if (Math.hypot(head.x - hole.x, head.y - hole.y) < holeRadius) {
+        loseLife({ message: 'Fell into a hole!' });
+        return;
+      }
+    }
   }
 
   // ---------- Drawing ----------
   function draw() {
     ctx.clearRect(0, 0, state.fieldW, state.fieldH);
     drawBackground();
+    drawDecor();
     drawBoundary();
     drawHoles();
     drawSnake();
     drawRats();
+    drawHen();
     drawParticles();
     drawPopups();
   }
@@ -421,6 +524,41 @@
     ctx.lineWidth = 6;
     roundRect(ctx, 3, 3, state.fieldW - 6, state.fieldH - 6, 16);
     ctx.stroke();
+  }
+
+  // Minimal decorative grass tufts and bushes (purely cosmetic).
+  function drawDecor() {
+    for (const d of state.decor) {
+      if (d.type === 'grass') drawGrass(d.x, d.y);
+      else drawBush(d.x, d.y);
+    }
+  }
+
+  function drawGrass(x, y) {
+    ctx.strokeStyle = '#7cc35f';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x + i * 5, y);
+      ctx.quadraticCurveTo(x + i * 5 + i * 2, y - 9, x + i * 6, y - 13);
+      ctx.stroke();
+    }
+  }
+
+  function drawBush(x, y) {
+    const tint = '#5fae54';
+    ctx.fillStyle = tint;
+    // A soft rounded clump of a few lobes.
+    ctx.beginPath();
+    ctx.arc(x - 8, y, 9, 0, Math.PI * 2);
+    ctx.arc(x + 6, y - 2, 10, 0, Math.PI * 2);
+    ctx.arc(x, y - 8, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath();
+    ctx.arc(x - 3, y - 9, 5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function drawHoles() {
@@ -478,37 +616,96 @@
 
   function drawRats() {
     for (const rat of state.rats) {
-      // Body
+      // Rotate the whole rat to face its movement direction, so the head
+      // always leads and it never appears to run backwards.
+      ctx.save();
+      ctx.translate(rat.x, rat.y);
+      ctx.rotate(rat.angle || 0);
+      // Body (head points to +x, tail to -x)
       ctx.fillStyle = '#9f735b';
       ctx.beginPath();
-      ctx.ellipse(rat.x, rat.y, 11, 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, 11, 8, 0, 0, Math.PI * 2);
       ctx.fill();
       // Head
       ctx.fillStyle = '#ac8068';
       ctx.beginPath();
-      ctx.arc(rat.x - 7, rat.y, 7, 0, Math.PI * 2);
+      ctx.arc(7, 0, 7, 0, Math.PI * 2);
       ctx.fill();
       // Ears
       ctx.fillStyle = '#94624d';
       ctx.beginPath();
-      ctx.arc(rat.x - 9, rat.y - 8, 4, 0, Math.PI * 2);
+      ctx.arc(6, -7, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(rat.x - 4, rat.y - 8, 4, 0, Math.PI * 2);
+      ctx.arc(9, -5, 4, 0, Math.PI * 2);
       ctx.fill();
       // Eye
       ctx.fillStyle = '#111';
       ctx.beginPath();
-      ctx.arc(rat.x - 9, rat.y - 1, 1.8, 0, Math.PI * 2);
+      ctx.arc(9, -1, 1.8, 0, Math.PI * 2);
       ctx.fill();
-      // Tail
+      // Tail (behind, pointing back)
       ctx.strokeStyle = '#c18d70';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(rat.x + 11, rat.y);
-      ctx.quadraticCurveTo(rat.x + 18, rat.y - 4, rat.x + 20, rat.y + 6);
+      ctx.moveTo(-11, 0);
+      ctx.quadraticCurveTo(-16, -2, -19, 4);
       ctx.stroke();
+      ctx.restore();
     }
+  }
+
+  function drawHen() {
+    const h = state.hen;
+    if (!h) return;
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    // Slight bob in the sprite.
+    ctx.translate(0, Math.sin(h.t * 2) * 2);
+    // Wings flutter.
+    const flap = Math.sin(h.t * 6) * 3;
+
+    // Body
+    ctx.fillStyle = '#f7c948';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 16, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Wing
+    ctx.fillStyle = '#e7a92b';
+    ctx.beginPath();
+    ctx.ellipse(-2, flap, 8, 6, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Head
+    ctx.fillStyle = '#f7c948';
+    ctx.beginPath();
+    ctx.arc(14, -9, 7, 0, Math.PI * 2);
+    ctx.fill();
+    // Comb
+    ctx.fillStyle = '#e8555f';
+    ctx.beginPath();
+    ctx.arc(15, -16, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Beak
+    ctx.fillStyle = '#f08a24';
+    ctx.beginPath();
+    ctx.moveTo(20, -9);
+    ctx.lineTo(26, -8);
+    ctx.lineTo(20, -6);
+    ctx.closePath();
+    ctx.fill();
+    // Eye
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(16, -10, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Golden shimmer circle so the player knows it's a bonus.
+    ctx.strokeStyle = 'rgba(247, 201, 72, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawParticles() {
@@ -692,7 +889,7 @@
   function boot() {
     state.bestScore = Number(localStorage.getItem('snakechase.best') || 0);
     resize();
-    resetLevel();
+    resetLevel(true);
     state.phase = 'menu';
     draw();
     overlay.classList.remove('hidden');
@@ -727,6 +924,20 @@
     const b = parseInt(h.substring(4, 6), 16);
     return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
   }
+
+  // TEMP debug hook for automated testing only.
+  window.__scDebug = function () {
+    return {
+      phase: state.phase,
+      lives: state.lives,
+      snakeLen: state.snake.length,
+      score: state.score,
+      hasHen: !!state.hen,
+      holes: state.holes.length,
+      decor: state.decor.length,
+      rats: state.rats.length,
+    };
+  };
 
   boot();
 })();
